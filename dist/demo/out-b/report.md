@@ -12,5 +12,5 @@
 tokens=480 revises=1 model_calls=1
 
 mission: 抓取某站点近一周公告，输出结构化表格
-run_id: 2026-09-06T08-46-22-674Z
+run_id: 2026-09-06T08-47-01-825Z
 accepted 3 / 3 subtasks
