@@ -1,2 +1,2 @@
-{"seq":0,"ts":"2026-09-06T08:47:01.562Z","name":"run_start","data":{"entry":"/home/runner/work/org-harness/org-harness/demo-run/registry/experts/record-validator.hsl","model":"scripted","task":"acceptance rehearsal: validate sample records","scale":"microkernel"}}
-{"seq":1,"ts":"2026-09-06T08:47:01.577Z","name":"run_end","data":{"elapsed_ms":15,"ok":true}}
+{"seq":0,"ts":"2026-09-06T08:51:48.976Z","name":"run_start","data":{"entry":"/home/runner/work/org-harness/org-harness/demo-run/registry/experts/record-validator.hsl","model":"scripted","task":"acceptance rehearsal: validate sample records","scale":"microkernel"}}
+{"seq":1,"ts":"2026-09-06T08:51:48.991Z","name":"run_end","data":{"elapsed_ms":15,"ok":true}}
