@@ -18,9 +18,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 const ROOT = path.resolve(import.meta.dir, "..");
-const HSL_ENTRY = path.join(ROOT, "org.hsl");
-const DIRECT_ENTRY = path.join(ROOT, "pool/direct.hsl");
+const HSL_ENTRY = path.join(ROOT, "hsl/org.hsl");
+const DIRECT_ENTRY = path.join(ROOT, "hsl/pool/direct.hsl");
 const STOCK_FIXTURE = path.join(ROOT, "fixtures/run-notices.json");
+
+// 仓库布局：
+//   hsl/        HSL 源码（28 模块：内核 + 13 域目录）
+//   demo-run/   本地构建目录（git 忽略，运行时工作区，含嵌套 git 注册表）
+//   dist/       编译/运行产物（入库）：dist/demo = 三连跑全量快照 + git-chain.json
 
 // ---- 工具链解析 ----
 function resolveDhv(): string {
@@ -175,8 +180,63 @@ async function cmdDemo(a: Args): Promise<number> {
     console.log("\n  git 注册表历史（registry 资产层）：");
     for (const l of gitLog.slice(0, 6)) console.log(`    ${l}`);
   }
-  console.log(`\n  总耗时 ${((Date.now() - t0) / 1000).toFixed(1)}s · 产物 ${ws}/out-{a,b,c}\n`);
+  console.log(`\n  总耗时 ${((Date.now() - t0) / 1000).toFixed(1)}s · 产物 ${ws}/out-{a,b,c}`);
+  exportDist(ws);
+  console.log(`  编译产物已导出 dist/demo（入库快照，含 git-chain.json）\n`);
   return 0;
+}
+
+// ---- 编译产物导出：dist/demo（提交进库的运行快照） ----
+const DIST_README = `# dist/demo — 三连跑编译产物（自动生成，勿手改）
+
+\`org demo\` 的全量输出快照：out-a/b/c（run.json / events.jsonl /
+journal.jsonl / 评分卡）、registry（专家注册表 + 固化 memo）、
+runtime（复发计数）与 git-chain.json（资产层 git 历史，因嵌套 .git
+不入库而以数据形式保存）。
+
+再生：\`bun cli/org.ts demo\`（CI 每次 push 自动再生并回写，见
+.github/workflows/ci.yml）。
+`;
+
+function exportDist(ws: string): void {
+  const dist = path.join(ROOT, "dist", "demo");
+  fs.rmSync(dist, { recursive: true, force: true });
+  fs.mkdirSync(dist, { recursive: true });
+  const skip = new Set([".git", ".hsl-runs"]);
+  const copy = (src: string, dst: string): void => {
+    for (const e of fs.readdirSync(src, { withFileTypes: true })) {
+      if (skip.has(e.name)) continue;
+      const s = path.join(src, e.name);
+      const d = path.join(dst, e.name);
+      if (e.isDirectory()) {
+        fs.mkdirSync(d, { recursive: true });
+        copy(s, d);
+      } else {
+        fs.copyFileSync(s, d);
+      }
+    }
+  };
+  copy(ws, dist);
+  fs.writeFileSync(
+    path.join(dist, "git-chain.json"),
+    JSON.stringify({ captured_at: new Date().toISOString(), commits: gitLogFull(ws) }, null, 2) + "\n",
+  );
+  fs.writeFileSync(path.join(dist, "README.md"), DIST_README);
+}
+
+function gitLogFull(ws: string): Array<{ sha: string; subject: string; date: string }> {
+  try {
+    const out = Bun.spawnSync(
+      ["git", "-C", ws, "log", "--pretty=format:%h%x1f%s%x1f%ci", "--all"],
+      { stdout: "pipe" },
+    );
+    return out.stdout.toString().split("\n").filter((l) => l.trim().length > 0).map((l) => {
+      const [sha, subject, date] = l.split("\x1f");
+      return { sha: sha ?? "", subject: subject ?? "", date: date ?? "" };
+    });
+  } catch {
+    return [];
+  }
 }
 
 function summarizeRun(outDir: string, id: string): [string, string] {
@@ -245,8 +305,18 @@ async function cmdAsk(a: Args): Promise<number> {
   return r.ok ? 0 : 1;
 }
 
+// 读命令的默认工作区：本地 demo-run 优先（活数据），否则 dist/demo（入库快照）
+function defaultWorkspace(a: Args): string {
+  if (a.workspace !== path.join(ROOT, "demo-run")) return a.workspace;
+  if (fs.existsSync(path.join(ROOT, "demo-run", "registry"))) return a.workspace;
+  if (fs.existsSync(path.join(ROOT, "dist", "demo", "registry"))) {
+    return path.join(ROOT, "dist", "demo");
+  }
+  return a.workspace;
+}
+
 async function cmdStatus(a: Args): Promise<number> {
-  const ws = a.workspace;
+  const ws = defaultWorkspace(a);
   console.log(`ORG status · 工作区 ${ws}\n`);
   // 注册表
   const index = path.join(ws, "registry/index.json");
@@ -293,7 +363,7 @@ async function cmdStatus(a: Args): Promise<number> {
 }
 
 async function cmdScore(a: Args): Promise<number> {
-  const ws = a.workspace;
+  const ws = defaultWorkspace(a);
   const candidates = ["out-c", "out-b", "out-a", "out-latest"]
     .map((d) => path.join(ws, d, "scorecard.json"))
     .filter((p) => fs.existsSync(p));
@@ -339,11 +409,13 @@ async function cmdReplay(a: Args): Promise<number> {
 async function cmdCheck(): Promise<number> {
   console.log(`dhv check · ORG 全源码（解释器 ${path.relative(ROOT, DHV)}）\n`);
   const files: string[] = [];
+  const skip = new Set([".git", "node_modules", ".hsl-runs", "demo-run"]);
   const walk = (dir: string): void => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name);
-      if (e.isDirectory()) walk(p);
-      else if (e.name.endsWith(".hsl")) files.push(p);
+      if (e.isDirectory()) {
+        if (!skip.has(e.name)) walk(p);
+      } else if (e.name.endsWith(".hsl")) files.push(p);
     }
   };
   walk(ROOT);
@@ -390,9 +462,12 @@ async function main(): Promise<number> {
   org replay --run <run-dir>
       确定性重放（journal 时间线重演）
   org check
-      dhv check 全部 HSL 源码
+      dhv check 全部 HSL 源码（hsl/ 源码 + dist/ 产物中的铸出专家）
 
-工具链：${path.relative(ROOT, DHV)}`);
+仓库布局：hsl/ = HSL 源码；demo-run/ = 本地构建目录（git 忽略）；
+          dist/ = 编译产物（入库；org demo 后自动导出）
+
+工具链：${path.relative(ROOT, DHV)}（缺则 bun scripts/setup-hsl.ts）`);
       return 0;
   }
 }

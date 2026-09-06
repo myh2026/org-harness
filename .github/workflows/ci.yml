@@ -1,0 +1,69 @@
+# CI：HSL 全量校验 + 三连跑冒烟 + 编译产物回写
+# ----------------------------------------------------------------------------
+# push（main）/ PR 时：
+#   1. 安装 HSL 工具链（dhv-ts，scripts/setup-hsl.ts 幂等）
+#   2. bun cli/org.ts check   —— 28 个 HSL 模块（hsl/ 源码 + dist/ 铸出专家）
+#   3. bun cli/org.ts demo    —— 三连跑冒烟（~2s），结束自动导出 dist/demo
+#   4. bun cli/org.ts status  —— 快照可读性冒烟
+#   5. dist/ 上传为 workflow artifact
+#   6. dist/ 与入库版本有差异 → 自动提交回写（chore(dist) [skip ci]，防循环触发）
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: write # 产物回写需要
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-and-demo:
+    name: dhv check · 三连跑 · 产物回写
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 检出仓库（含入库的 dist/ 编译产物）
+        uses: actions/checkout@v4
+
+      - name: 安装 Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: 安装 HSL 工具链（dhv-ts 解释器）
+        run: bun scripts/setup-hsl.ts
+
+      - name: dhv check 全量校验（28 模块）
+        run: bun cli/org.ts check
+
+      - name: 三连跑演示（铸专家 → 复用+补丁 → 蓝绿验证；导出 dist/demo）
+        run: bun cli/org.ts demo
+
+      - name: status 冒烟（读最新工作区）
+        run: bun cli/org.ts status
+
+      - name: 上传编译产物（workflow artifact）
+        uses: actions/upload-artifact@v4
+        with:
+          name: org-dist-demo
+          path: dist/demo
+          retention-days: 30
+
+      - name: 编译产物回写（CD：dist/ 与源码同库演进）
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "org-ci-bot"
+          git config user.email "org-ci-bot@users.noreply.github.com"
+          git add dist/
+          if git diff --cached --quiet; then
+            echo "✓ dist/ 与入库版本一致，无需回写"
+          else
+            git commit -m "chore(dist): regenerate demo artifacts [skip ci]"
+            git push
+            echo "✓ dist/ 已回写（[skip ci] 防循环触发）"
+          fi

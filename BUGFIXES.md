@@ -1,7 +1,7 @@
 # BUGFIXES — ORG 开发过程中发现并修复的 HSL 工具链问题
 
 > 开发 ORG 的过程同时是对 HSL（dhv-ts 参考解释器）的一次实测。以下按严重度排序，
-> 每项含复现探针（`probe/` 下可重放）。上游修复提交在
+> 每项含复现探针（`hsl/probe/` 下可重放）。上游修复提交在
 > [harness-specification-language](https://github.com/myh2026/harness-specification-language) 仓库。
 
 ## B-1（已修复上游）`Vec::iter_mut` 缺失于解释器内建方法面
@@ -9,7 +9,7 @@
 - **现象**：`dhv check` 通过的源码在运行期崩溃 `Vec 没有方法 "iter_mut"`。
 - **影响面**：旗舰示例 nova 的 `state.hsl::accept/complete_task`（`for t in self.tasks.iter_mut()`）
   即使用该写法——**nova 可 check 不可 run**，属于「check 过 / run 崩」的静默断层。
-- **复现**：`probe/probe7.hsl`（check ✓ / run ✗ → 修复后 run ✓ 且字段写透传）。
+- **复现**：`hsl/probe/probe7.hsl`（check ✓ / run ✗ → 修复后 run ✓ 且字段写透传）。
 - **修复**（`dhv-ts/src/builtins.ts`）：`VEC_METHODS` 注册 `iter_mut: { fn: (r) => r }`。
   语义：返回数组本体；struct 元素是 JS 对象引用，`for t in v.iter_mut() { t.field = ... }`
   的字段写按引用透传（与解释器既有的对象透明共享模型一致）。primitive 元素的写不透传

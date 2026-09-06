@@ -1,4 +1,6 @@
+# 构建目录（本地运行时工作区，含嵌套 git 注册表）
 demo-run/
 .hsl-runs/
 node_modules/
 *.log
+# dist/ 为编译产物目录 —— 刻意提交入库（org demo 自动导出 + CI 再生回写）

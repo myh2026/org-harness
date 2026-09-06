@@ -5,9 +5,11 @@
 **基于 HSL 的组织化多智能体系统 · 子智能体可生成、可验收、可复用、可演进**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-informational.svg)](LICENSE)
-![Status](https://img.shields.io/badge/status-v0.1.0_可运行-brightgreen.svg)
+[![Status](https://img.shields.io/badge/status-v0.1.0_可运行-brightgreen.svg)](https://github.com/myh2026/org-harness/releases)
 [![Built on HSL](https://img.shields.io/badge/built_on-HSL-blue.svg)](https://github.com/myh2026/harness-specification-language)
 [![BNF](https://img.shields.io/badge/BNF-v1.5.0-blue.svg)](https://github.com/myh2026/harness-specification-language/blob/main/toolchain/hsl-spec/BNF.md)
+[![CI](https://github.com/myh2026/org-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/myh2026/org-harness/actions/workflows/ci.yml)
+[![Release](https://github.com/myh2026/org-harness/actions/workflows/release.yml/badge.svg)](https://github.com/myh2026/org-harness/actions/workflows/release.yml)
 
 </div>
 
@@ -15,7 +17,7 @@
 
 > **一句话定位**：现有框架把子智能体当作一次性函数——任务结束即销毁，不留任何资产；ORG 把子智能体当作**工程资产**管理——结构用 HSL 描述、生成经编译期校验与 fixture 验收、任务结束沉淀回库，使系统能力随使用持续增强。
 
-> **当前状态**：v0.1.0 可运行实现。信封契约、主控监督回路、工厂闸门（真实 `dhv check` + fixture 验收）、池化（轻档）、直连记账、知识补丁、评分卡归因、固化管线（精确匹配档）全部落地并可复现演示（`org demo`，1.6s 三连跑）。路线图后半段见[实施路线图](#-实施路线图)与[已知边界](#%EF%B8%8F-已知边界诚实声明)。
+> **当前状态**：v0.1.0 可运行实现。信封契约、主控监督回路、工厂闸门（真实 `dhv check` + fixture 验收）、池化（轻档）、直连记账、知识补丁、评分卡归因、固化管线（精确匹配档）全部落地并可复现演示（`org demo`，1.6s 三连跑）。仓库采用「源码（`hsl/`）+ 编译产物（`dist/`，入库）+ CI/CD（GitHub Actions：check / 三连跑冒烟 / 产物回写 / tag 发布）」布局。路线图后半段见[实施路线图](#-实施路线图)与[已知边界](#%EF%B8%8F-已知边界诚实声明)。
 
 ## ✨ 为什么是 ORG
 
@@ -127,12 +129,12 @@ flowchart TB
 
 | 部件 | 职责 | 关键机制 | v0.1.0 |
 |:---|:---|:---|:---|
-| **主控（编排与监督）** | 分解、路由、审查、汇总 | 事件拓扑（microkernel）；批量澄清早发；任务契约先行 | ✅ org.hsl |
-| **路由器** | 每个子任务四选一 | 类型兼容静态可查；纯函数判定 | ✅ router/policy.hsl |
-| **专家库（Registry）** | 磁盘资产，不占运行时资源 | git 注册表；manifest 索引；能力交集 + 语义粗排检索 | ✅ registry/manifest.hsl |
-| **专家工厂（Factory）** | 新品生成 + 补丁合入，同一闸门 | 提取 → 生成 → dhv check → fixture 验收 → 登记 | ✅ factory/pipeline.hsl |
-| **智能体池（Pool）** | 运行中的有状态实例 | 生命周期状态机；双执行车道（进程内/嵌套=蓝绿） | ✅ 轻档 pool/lifecycle.hsl |
-| **直连前台** | 用户可寻址池内专家 | 记账 + 纪要回写强制执行 | ✅ 单轮 pool/direct.hsl |
+| **主控（编排与监督）** | 分解、路由、审查、汇总 | 事件拓扑（microkernel）；批量澄清早发；任务契约先行 | ✅ hsl/org.hsl |
+| **路由器** | 每个子任务四选一 | 类型兼容静态可查；纯函数判定 | ✅ hsl/router/policy.hsl |
+| **专家库（Registry）** | 磁盘资产，不占运行时资源 | git 注册表；manifest 索引；能力交集 + 语义粗排检索 | ✅ hsl/registry/manifest.hsl |
+| **专家工厂（Factory）** | 新品生成 + 补丁合入，同一闸门 | 提取 → 生成 → dhv check → fixture 验收 → 登记 | ✅ hsl/factory/pipeline.hsl |
+| **智能体池（Pool）** | 运行中的有状态实例 | 生命周期状态机；双执行车道（进程内/嵌套=蓝绿） | ✅ 轻档 hsl/pool/lifecycle.hsl |
+| **直连前台** | 用户可寻址池内专家 | 记账 + 纪要回写强制执行 | ✅ 单轮 hsl/pool/direct.hsl |
 
 ### 主控与监督回路
 
@@ -279,61 +281,57 @@ ORG 是 [HSL（Harness Specification Language）](https://github.com/myh2026/har
 ## 📂 目录结构
 
 ```
-org/
-├── org.hsl                      # 主控（内核）：监督回路 graph + main 入口 + 投射
-├── contracts/
-│   └── contract.hsl             # 信封契约：TaskSpec / StatusReport / 四态裁决
-├── router/
-│   └── policy.hsl               # 路由策略：A/B/C/D 四路径判定（纯函数）
-├── factory/
-│   ├── pipeline.hsl             # 工厂管线：五步闸门 + 补丁合入流水线
-│   └── stock/
-│       └── record-validator.hsl # 生成物录制 + 人工抽查存档（mint_hsl 轨道源）
-├── registry/
-│   ├── manifest.hsl             # manifest schema + 磁盘注册表 + 检索
-│   └── experts/
-│       └── notice-parser.hsl    # 示例专家：机械节点 + 判定节点（固化演示）
-├── pool/
-│   ├── lifecycle.hsl            # 实例生命周期状态机 + 双执行车道
-│   └── direct.hsl               # 直连前台：org ask（记账 + 纪要回写）
-├── runtime/
-│   ├── journal.hsl              # 事件溯源 + 确定性重放
-│   └── crystallize.hsl          # 固化管线：观测账本 / 冻结 / 命中 / 降级
-├── models/
-│   └── scorecard.hsl            # 评分卡：能力轴 × 任务类 + 证据归因聚合
-├── providers/
-│   └── model.hsl                # 模型网关：scripted（剧本轨道）/ deepseek（真实 LLM）
-├── policy/
-│   └── capability.hsl           # 能力三态策略 + 预算水位 + 审计事件
-├── adapters/
-│   └── bridge.hsl               # 外部智能体导入（subagent / MCP / A2A 探测登记）
-├── config/
-│   └── resources.hsl            # 提示词 / 判据 / 运行配置（block 静态资源）
-├── types/
-│   ├── state.hsl                # 内核状态模型：子任务 / 路由 / 资产 / 运行态
-│   └── errors.hsl               # 双错误族 + From 转换
+org-harness/
+├── hsl/                          # ✦ HSL 源码（全部 .hsl 单列此层）
+│   ├── org.hsl                   #   主控（内核）：监督回路 graph + main 入口 + 投射
+│   ├── contracts/contract.hsl    #   信封契约：TaskSpec / StatusReport / 四态裁决
+│   ├── router/policy.hsl         #   路由策略：A/B/C/D 四路径判定（纯函数）
+│   ├── factory/                  #   pipeline.hsl（五步闸门 + 补丁合入）
+│   │   └── stock/record-validator.hsl   # 生成物录制 + 人工抽查存档
+│   ├── registry/                 #   manifest.hsl（schema + 检索）
+│   │   └── experts/notice-parser.hsl    # 示例专家（固化演示）
+│   ├── pool/                     #   lifecycle.hsl（状态机 + 双车道）· direct.hsl（org ask）
+│   ├── runtime/                  #   journal.hsl（事件溯源）· crystallize.hsl（固化管线）
+│   ├── models/scorecard.hsl      #   评分卡：证据归因聚合
+│   ├── providers/model.hsl       #   模型网关：scripted / deepseek
+│   ├── policy/capability.hsl     #   能力三态 + 预算水位 + 审计
+│   ├── adapters/bridge.hsl       #   外部智能体导入（subagent / MCP / A2A）
+│   ├── config/resources.hsl      #   提示词 / 判据 / 运行配置（block 静态资源）
+│   ├── types/                    #   state.hsl · errors.hsl
+│   └── probe/                    #   HSL 语言探针（含上游 bug 复现）
 ├── cli/
-│   └── org.ts                   # org CLI：run / demo / ask / status / score / replay / check
-├── demo-ws/                     # 演示工作区模板（raw 公告 + 注册表模板）
+│   └── org.ts                    # org CLI：run / demo / ask / status / score / replay / check
+├── demo-ws/                      # 演示工作区模板（raw 公告 + 注册表模板）
 ├── fixtures/
-│   └── run-notices.json         # 三连跑剧本（make-fixture.ts 产出）
+│   └── run-notices.json          # 三连跑剧本（make-fixture.ts 产出）
 ├── scripts/
-│   └── make-fixture.ts          # 剧本生成器（轨道消费序列的工程化设计）
-├── probe/                       # HSL 语言探针（开发资产：含上游 bug 复现）
-└── docs/                        # 设计文档 / 走读
+│   ├── make-fixture.ts           # 剧本生成器（轨道消费序列的工程化设计）
+│   └── setup-hsl.ts              # 工具链自动安装（克隆 dhv-ts 到兄弟目录，幂等）
+├── dist/                         # ✦ 编译产物（提交入库）
+│   └── demo/                     #   三连跑全量快照：out-{a,b,c} / registry / runtime
+│       └── git-chain.json        #   资产层 git 历史（嵌套 .git 不入库，链条以数据保存）
+├── .github/workflows/
+│   ├── ci.yml                    # CI：dhv check 28 模块 + 三连跑冒烟 + dist 产物回写
+│   └── release.yml               # CD：tag → 校验 → 打包（源码+产物）→ GitHub Release
+├── docs/                         # 设计文档 / 走读
+└── demo-run/                     # 本地构建目录（git 忽略；运行时工作区）
 ```
+
+> **布局语义**：`hsl/` 是源码层（人写）；`dist/` 是编译产物层（机器生成，与源码同库演进——
+> `org demo` 自动导出，CI 每次 push 再生回写）；`demo-run/` 是本地构建目录（含嵌套 git
+> 注册表，不入库）。克隆即得可校验的完整状态：`bun cli/org.ts check` 直接 28 模块全过。
 
 ## ⚡ 快速开始（v0.1.0 实测可用）
 
 ```bash
-# 0) 前置：clone HSL 工具链（dhv-ts 解释器）到本仓库兄弟目录
-git clone https://github.com/myh2026/harness-specification-language.git ../harness-specification-language
+# 0) 前置：安装 HSL 工具链（dhv-ts 解释器，克隆到兄弟目录，幂等）
+bun scripts/setup-hsl.ts
 #    或 export DHV_TS=/path/to/hsl/toolchain/dhv-ts/src/main.ts
 
-# 1) 校验 ORG 全部源码（28 个 HSL 模块）
+# 1) 校验 ORG 全部源码（28 个 HSL 模块：hsl/ 源码 27 + dist/ 铸出专家 1）
 bun cli/org.ts check
 
-# 2) 三连跑演示（1.6s：铸专家 → 复用+补丁 → 蓝绿验证）
+# 2) 三连跑演示（~1.7s：铸专家 → 复用+补丁 → 蓝绿验证；结束时自动导出 dist/demo）
 bun cli/org.ts demo
 
 # 3) 团队模式派单（单轮）
@@ -342,18 +340,27 @@ bun cli/org.ts run --task "抓取某站点近一周公告，输出结构化表�
 # 4) 直连指定专家（记账 + 纪要回写）
 bun cli/org.ts ask notice-parser "上周抓取任务里的字段映射规则是什么？"
 
-# 5) 查看库与池状态 / git 注册表历史
+# 5) 查看库与池状态 / git 注册表历史（无 demo-run 时自动读 dist/demo 入库快照）
 bun cli/org.ts status
 
 # 6) 查看模型评分卡与证据来源
 bun cli/org.ts score --axis structured_output
 
 # 7) 确定性重放某次历史运行
-bun cli/org.ts replay --run demo-run/out-a
+bun cli/org.ts replay --run demo-run/out-a   # 或 dist/demo/out-a
 
 # 8) 真实 LLM 模式（经 $host.llm 网关；判定调用全部走真实模型）
 bun cli/org.ts run --task "..." --model deepseek
 ```
+
+### CI/CD
+
+- **push / PR**（`ci.yml`）：`dhv check` 28 模块 → 三连跑冒烟 → `status` 冒烟 → 编译产物
+  上传为 workflow artifact → **dist/ 有变化则自动回写提交**（`chore(dist): … [skip ci]`）。
+- **tag `v*`**（`release.yml`）：同套校验 → 打包源码 + dist 产物 → 创建 GitHub Release
+  （tar.gz + dist zip，发布说明取 CHANGELOG 对应版本段落）。
+- 克隆仓库后无需跑 demo 即可 `check`（28 模块）与 `status`（读 `dist/demo` 快照）——
+  编译产物与源码同库交付。
 
 ## 🗺️ 实施路线图
 
