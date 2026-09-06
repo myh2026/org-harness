@@ -1,3 +1,9 @@
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
 # CI：HSL 全量校验 + 三连跑冒烟 + 编译产物回写
 # ----------------------------------------------------------------------------
 # push（main）/ PR 时：
@@ -9,11 +15,6 @@
 #   6. dist/ 与入库版本有差异 → 自动提交回写（chore(dist) [skip ci]，防循环触发）
 name: CI
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-  workflow_dispatch:
 
 permissions:
   contents: write # 产物回写需要
