@@ -1,0 +1,14 @@
+{
+  "name": "org-cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "ORG — Organization Harness CLI（基于 HSL 的组织化多智能体系统）",
+  "license": "MIT",
+  "bin": { "org": "./org.ts" },
+  "scripts": {
+    "org": "bun org.ts",
+    "demo": "bun org.ts demo",
+    "check": "bun org.ts check",
+    "fixture": "bun ../scripts/make-fixture.ts"
+  }
+}

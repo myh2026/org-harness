@@ -1,0 +1,123 @@
+// ============================================================================
+// org/pool/direct.hsl — 直连前台：用户可寻址任意池内专家
+// ============================================================================
+// 治理原则（设计铁律 #1）：调度权可绕，知情权与记账权不可绕。
+//   - 事件上总线（每次直连发 direct_open / direct_close 事件）
+//   - 花销记独立科目（tokens 独立计数，artifact: direct-ledger.jsonl）
+//   - 结束后纪要回写（memo → 工作区 runtime/direct-memos.md，主控可读）
+// 用户在场（Direct 模式）：confirm 态能力就地放行 —— 天花板管缺席，确认管在场。
+//
+// 工程注记：直连会话是单轮问答（多轮是 P5 路线图项），因此以 async fn 而非
+// graph 呈现 —— G1 要求 graph 恰含 AgentLoop，为单轮流程套循环是过度仪式。
+// ============================================================================
+import { AccessMode, CapabilityPolicy } from "../policy/capability.hsl";
+import { ExpertError } from "../types/errors.hsl";
+import { ExpertManifest, Registry } from "../registry/manifest.hsl";
+import { ask } from "../providers/model.hsl";
+
+/// 直连会话（一次 org ask = 一个会话）。
+#[derive(Debug, Clone)]
+export struct DirectSession {
+    expert: String,
+    question: String,
+    answer: String,
+    tokens: u32,
+}
+
+/// 直连入口（org ask <expert> "<question>"）。
+export fn main() -> Result<(), ExpertError> {
+    // CLI 经环境变量传参（ORG_ASK_EXPERT / ORG_ASK_QUESTION）
+    let expert: String = native typescript {
+        return $host.env.get("ORG_ASK_EXPERT") || "";
+    };
+    let question: String = native typescript {
+        return $host.env.get("ORG_ASK_QUESTION") || "";
+    };
+    if expert.len() == 0 || question.len() == 0 {
+        return Err(ExpertError::new(
+            String::from("direct"),
+            String::from("usage"),
+            String::from("org ask <expert> \"<question>\"（专家名与问题必填）"),
+        ));
+    }
+    let session = direct(expert, question)?;
+    println!("[direct] {} 回答（{} tokens）：", session.expert, session.tokens);
+    println!("{}", session.answer);
+    Ok(())
+}
+
+/// 直连会话：能力核对 → 寻址 → 问答 → 记账 → 纪要回写。
+export async fn direct(expert: String, question: String) -> Result<DirectSession, ExpertError> {
+    let mut policy = CapabilityPolicy::default();
+    let registry = Registry::load(String::from("registry"))?;
+
+    // 直连模式：用户在场 —— confirm 态能力就地放行（天花板管缺席，确认管在场）
+    policy.decide(String::from("llm_call"), AccessMode::Direct)?;
+
+    // 事件上总线（知情权不可绕）
+    let expert_evt = expert.clone();
+    let _ = native typescript {
+        $host.events.emit("journal", { name: "direct_open", detail: expert_evt });
+        return true;
+    };
+
+    // 专家寻址：注册表命中（在岗才可直连）
+    let manifest = find_direct_target(registry, expert.clone());
+    let m = match manifest {
+        Some(found) => found,
+        None => {
+            return Err(ExpertError::new(
+                String::from("direct"),
+                String::from("not-found"),
+                format!("专家 {} 不在注册表（直连仅可寻址在岗专家）", expert),
+            ));
+        },
+    };
+
+    // 问题经模型网关（轨道 direct:<expert>；真实模式走 LLM）
+    let track = format!("direct:{}", expert);
+    let answer = ask(track, format!("You are the expert: {}. Answer the user directly and briefly.", m.description), question.clone()).await?;
+
+    // 花销记账（独立科目：direct-ledger.jsonl）
+    let tokens = estimate_tokens(question.clone(), answer.clone());
+    let ledger_line = format!("{{\"expert\":\"{}\",\"question\":\"{}\",\"tokens\":{}}}\n", expert, question, tokens);
+    let _ = native typescript {
+        $host.artifacts.write("direct-ledger.jsonl", ledger_line);
+        return true;
+    };
+
+    // 纪要回写（主控编排上下文保持完整 —— 事后知情，不事前审批）
+    let memo = format!("direct session with {} :: {} -> {}", expert, question, answer);
+    let _ = native typescript {
+        try {
+            const prev = $host.fs.read("runtime/direct-memos.md");
+            $host.fs.write("runtime/direct-memos.md", prev + memo + "\n");
+        } catch (e) {
+            $host.fs.write("runtime/direct-memos.md", memo + "\n");
+        }
+        return true;
+    };
+    let close_evt = expert.clone();
+    let _ = native typescript {
+        $host.events.emit("journal", { name: "direct_close", detail: close_evt });
+        return true;
+    };
+
+    Ok(DirectSession { expert: expert, question: question, answer: answer, tokens: tokens })
+}
+
+/// 直连寻址（v1：注册表在岗检查；池实例忙时排队是 P5 路线图项）。
+fn find_direct_target(registry: Registry, name: String) -> Option<ExpertManifest> {
+    for m in registry.experts.iter() {
+        if m.name == name {
+            return Some(m.clone());
+        }
+    }
+    None
+}
+
+/// 粗估 token（问答各按 1 token / 3 chars 折算；诚实边界：非精确计量）。
+fn estimate_tokens(question: String, answer: String) -> u32 {
+    let raw = (question.len() + answer.len()) / 3;
+    raw as u32
+}
